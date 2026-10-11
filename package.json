@@ -1,0 +1,44 @@
+{
+  "name": "octanemcpplus",
+  "version": "1.0.0",
+  "description": "Model Context Protocol (MCP) server & 2021 Luau Studio plugin for Octane",
+  "main": "src/index.js",
+  "bin": {
+    "octane-mcp": "./src/index.js"
+  },
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OctaneUtils/OctaneMCPPlus.git"
+  },
+  "files": [
+    "src",
+    "plugin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "bun run src/index.js",
+    "test": "bun test",
+    "status": "bun run tests/cli-status.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "octane",
+    "roblox",
+    "luau",
+    "elysia",
+    "bun",
+    "ai",
+    "cursor",
+    "claude",
+    "antigravity"
+  ],
+  "author": "omnifla",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "elysia": "^1.4.30"
+  }
+}
