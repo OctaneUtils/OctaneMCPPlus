@@ -59,7 +59,14 @@ bun start
 
 ## Connecting Your AI Client
 
-Add the server to your AI client's MCP configuration file:
+Add the server to your AI client's MCP configuration:
+
+### Claude Code (CLI)
+Add OctaneMCPPlus directly using the Claude Code CLI:
+```bash
+claude mcp add octane -- bun run <PATH_TO_OCTANE_MCP_PLUS>/src/index.js
+```
+*Note: If you run `claude` inside the cloned `OctaneMCPPlus` repository, it will automatically detect and load the included `.mcp.json` configuration!*
 
 ### Claude Desktop (`claude_desktop_config.json`)
 ```json

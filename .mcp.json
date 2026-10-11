@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "octane": {
+      "command": "bun",
+      "args": ["run", "./src/index.js"],
+      "env": {
+        "OCTANE_PORT": "3002"
+      }
+    }
+  }
+}
