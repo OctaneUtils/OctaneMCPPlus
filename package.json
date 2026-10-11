@@ -20,7 +20,9 @@
   "scripts": {
     "start": "bun run src/index.js",
     "test": "bun test",
-    "status": "bun run tests/cli-status.js"
+    "status": "bun run tests/cli-status.js",
+    "validate": "mcpb validate manifest.json",
+    "pack": "mcpb pack . && mcpb clean octane-mcp.mcpb"
   },
   "keywords": [
     "mcp",
@@ -38,8 +40,12 @@
   "author": "omnifla",
   "license": "MIT",
   "dependencies": {
+    "@elysiajs/node": "^1.4.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "elysia": "^1.4.30",
     "elysia-mcp": "^0.1.1"
+  },
+  "devDependencies": {
+    "@anthropic-ai/mcpb": "^2.1.2"
   }
 }

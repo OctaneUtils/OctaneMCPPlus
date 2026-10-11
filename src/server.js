@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import { node } from "@elysiajs/node";
 import { mcp } from "elysia-mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -48,7 +49,8 @@ export class OctaneMcpBridge {
 
   // Start Elysia web server with elysia-mcp plugin + Octane bridge routes
   startElysiaServer() {
-    this.app = new Elysia()
+    const elysiaOptions = typeof Bun === "undefined" ? { adapter: node() } : {};
+    this.app = new Elysia(elysiaOptions)
       .onRequest(({ set }) => {
         set.headers["Access-Control-Allow-Origin"] = "*";
         set.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";

@@ -70,7 +70,20 @@ claude mcp add octane -- bun run <PATH_TO_OCTANE_MCP_PLUS>/src/index.js
 ```
 *Note: If you run `claude` inside the cloned `OctaneMCPPlus` repository, it will automatically detect and load the included `.mcp.json` configuration!*
 
-### Claude Desktop (`claude_desktop_config.json`)
+### Claude Desktop
+
+You can install OctaneMCPPlus in Claude Desktop using either the new **Desktop Extension (`.mcpb`)** or manual configuration:
+
+#### Option A: Desktop Extension (`.mcpb` One-Click Install)
+1. Build the standalone bundle:
+   ```bash
+   bun run pack
+   ```
+2. In Claude Desktop, open **Settings > Extensions > Advanced settings**.
+3. Under **Extension Developer**, click **"Install Extension..."** and select `octane-mcp.mcpb`.
+4. Claude Desktop will run the extension using its built-in runtime—no external terminal or configuration editing required!
+
+#### Option B: Manual Config (`claude_desktop_config.json`)
 ```json
 {
   "mcpServers": {

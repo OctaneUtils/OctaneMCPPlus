@@ -1,0 +1,93 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/schemas/mcpb-manifest-v0.4.schema.json",
+  "manifest_version": "0.4",
+  "name": "octanemcpplus",
+  "display_name": "Octane MCP Plus",
+  "version": "1.0.0",
+  "description": "Model Context Protocol bridge for Octane Studio (2021 Luau)",
+  "author": {
+    "name": "omnifla",
+    "url": "https://github.com/OctaneUtils/OctaneMCPPlus"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OctaneUtils/OctaneMCPPlus"
+  },
+  "license": "MIT",
+  "keywords": [
+    "octane",
+    "roblox",
+    "luau",
+    "studio",
+    "mcp",
+    "game-dev"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "src/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/src/index.js"
+      ],
+      "env": {
+        "OCTANE_PORT": "${user_config.port}"
+      }
+    }
+  },
+  "user_config": {
+    "port": {
+      "type": "number",
+      "title": "Bridge Port",
+      "description": "Local HTTP bridge port for Octane Studio (default: 3002)",
+      "required": false,
+      "default": 3002
+    }
+  },
+  "tools": [
+    {
+      "name": "get_status",
+      "description": "Check if Octane Studio is connected and reports heartbeat status."
+    },
+    {
+      "name": "execute_luau",
+      "description": "Evaluate arbitrary Luau code inside Octane Studio edit mode."
+    },
+    {
+      "name": "read_script",
+      "description": "Read the source code of any Script, LocalScript, or ModuleScript."
+    },
+    {
+      "name": "write_script",
+      "description": "Update or create scripts with new Luau code."
+    },
+    {
+      "name": "get_tree",
+      "description": "Inspect the DataModel hierarchy under any root (e.g. Workspace, ReplicatedStorage)."
+    },
+    {
+      "name": "get_selection",
+      "description": "Get instances currently selected in Explorer or 3D viewport."
+    },
+    {
+      "name": "set_selection",
+      "description": "Select instances by path in Octane Studio."
+    },
+    {
+      "name": "create_instance",
+      "description": "Create new Instances (Part, Model, Folder, RemoteEvent, etc.) with properties."
+    },
+    {
+      "name": "delete_instance",
+      "description": "Destroy an instance at a given path."
+    },
+    {
+      "name": "get_properties",
+      "description": "Read specified properties of an instance."
+    },
+    {
+      "name": "set_properties",
+      "description": "Modify properties of an instance."
+    }
+  ]
+}
