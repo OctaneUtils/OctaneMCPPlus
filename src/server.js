@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import { mcp } from "elysia-mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -8,16 +9,16 @@ export class OctaneMcpBridge {
     this.port = port;
     this.pendingCommands = new Map(); // id -> { resolve, reject, timer, action }
     this.commandQueue = []; // array of { id, action, params }
-    this.activePollResolver = null;
     this.lastStudioHeartbeat = 0;
     this.app = null;
 
-    this.mcp = new McpServer({
-      name: "octane-mcp",
+    // Stdio MCP Server (for CLI & spawned processes)
+    this.stdioMcp = new McpServer({
+      name: "octanemcpplus",
       version: "1.0.0",
     });
 
-    this.setupMcpTools();
+    this.setupMcpTools(this.stdioMcp);
   }
 
   isStudioConnected() {
@@ -45,14 +46,29 @@ export class OctaneMcpBridge {
     });
   }
 
-  // Start Elysia web server
+  // Start Elysia web server with elysia-mcp plugin + Octane bridge routes
   startElysiaServer() {
     this.app = new Elysia()
       .onRequest(({ set }) => {
         set.headers["Access-Control-Allow-Origin"] = "*";
         set.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
-        set.headers["Access-Control-Allow-Headers"] = "Content-Type";
+        set.headers["Access-Control-Allow-Headers"] = "Content-Type, Accept";
       })
+      // elysia-mcp: Streamable HTTP MCP transport mounted at /mcp
+      .use(
+        mcp({
+          serverInfo: {
+            name: "octanemcpplus",
+            version: "1.0.0",
+          },
+          capabilities: {
+            tools: {},
+          },
+          setupServer: async (httpMcpServer) => {
+            this.setupMcpTools(httpMcpServer);
+          },
+        })
+      )
       // Health / Status
       .get("/health", () => ({
         ok: true,
@@ -115,14 +131,16 @@ export class OctaneMcpBridge {
       });
 
     this.app.listen({ port: this.port }, ({ hostname, port }) => {
-      console.error(`[Octane MCP Bridge (Elysia)] Listening on http://${hostname || "localhost"}:${port}`);
+      console.error(`[OctaneMCPPlus (Elysia + elysia-mcp)] Listening on http://${hostname || "localhost"}:${port}`);
+      console.error(`  - MCP HTTP Streamable endpoint: http://${hostname || "localhost"}:${port}/mcp`);
+      console.error(`  - Studio Bridge poll endpoint:   http://${hostname || "localhost"}:${port}/poll`);
     });
   }
 
-  // Register all Model Context Protocol tools
-  setupMcpTools() {
+  // Register all Model Context Protocol tools on an McpServer instance
+  setupMcpTools(targetMcp) {
     // 1. Check Studio Connection Status
-    this.mcp.tool(
+    targetMcp.tool(
       "get_status",
       "Check if Octane Studio is currently running and the MCP plugin is connected.",
       {},
@@ -132,7 +150,7 @@ export class OctaneMcpBridge {
           connected,
           lastHeartbeat: this.lastStudioHeartbeat ? new Date(this.lastStudioHeartbeat).toISOString() : "Never",
           bridgePort: this.port,
-          framework: "Elysia / Bun",
+          framework: "Bun + Elysia + elysia-mcp",
           queuedCommands: this.commandQueue.length,
           instructions: connected
             ? "Octane Studio is connected and ready to execute commands."
@@ -146,7 +164,7 @@ export class OctaneMcpBridge {
     );
 
     // 2. Execute Arbitrary Luau Code
-    this.mcp.tool(
+    targetMcp.tool(
       "execute_luau",
       "Execute arbitrary Luau code inside Octane Studio edit mode. Captures print/warn output, returns values, and creates undo waypoints.",
       {
@@ -173,7 +191,7 @@ export class OctaneMcpBridge {
     );
 
     // 3. Read Script Source
-    this.mcp.tool(
+    targetMcp.tool(
       "read_script",
       "Read the Luau source code of a Script, LocalScript, or ModuleScript in the DataModel.",
       {
@@ -200,7 +218,7 @@ export class OctaneMcpBridge {
     );
 
     // 4. Write / Update Script Source
-    this.mcp.tool(
+    targetMcp.tool(
       "write_script",
       "Update the Luau source code of an existing script, or create a new Script/LocalScript/ModuleScript if it doesn't exist.",
       {
@@ -232,7 +250,7 @@ export class OctaneMcpBridge {
     );
 
     // 5. Inspect Hierarchy Tree
-    this.mcp.tool(
+    targetMcp.tool(
       "get_tree",
       "Inspect the instance hierarchy tree in Octane Studio under a given root path (e.g. 'Workspace', 'ServerScriptService', 'ReplicatedStorage', or 'game').",
       {
@@ -267,7 +285,7 @@ export class OctaneMcpBridge {
     );
 
     // 6. Get Current Selection in Studio
-    this.mcp.tool(
+    targetMcp.tool(
       "get_selection",
       "Get the list of instances currently selected in the Octane Studio Explorer or 3D viewport.",
       {},
@@ -287,7 +305,7 @@ export class OctaneMcpBridge {
     );
 
     // 7. Set Selection in Studio
-    this.mcp.tool(
+    targetMcp.tool(
       "set_selection",
       "Select one or more instances in Octane Studio by their paths.",
       {
@@ -314,7 +332,7 @@ export class OctaneMcpBridge {
     );
 
     // 8. Create Instance
-    this.mcp.tool(
+    targetMcp.tool(
       "create_instance",
       "Create a new Instance (e.g. Part, Model, Folder, RemoteEvent, ScreenGui) under a parent instance with specified properties.",
       {
@@ -352,7 +370,7 @@ export class OctaneMcpBridge {
     );
 
     // 9. Delete Instance
-    this.mcp.tool(
+    targetMcp.tool(
       "delete_instance",
       "Delete (destroy) an instance at the specified path.",
       {
@@ -374,7 +392,7 @@ export class OctaneMcpBridge {
     );
 
     // 10. Get Properties of an Instance
-    this.mcp.tool(
+    targetMcp.tool(
       "get_properties",
       "Read specified properties of an instance at a given path.",
       {
@@ -399,7 +417,7 @@ export class OctaneMcpBridge {
     );
 
     // 11. Set Properties of an Instance
-    this.mcp.tool(
+    targetMcp.tool(
       "set_properties",
       "Modify properties of an instance at a given path.",
       {
@@ -432,7 +450,7 @@ export class OctaneMcpBridge {
   async start() {
     this.startElysiaServer();
     const transport = new StdioServerTransport();
-    await this.mcp.connect(transport);
-    console.error("[Octane MCP] Stdio MCP server connected and ready.");
+    await this.stdioMcp.connect(transport);
+    console.error("[OctaneMCPPlus] Stdio MCP server connected and ready.");
   }
 }

@@ -17,6 +17,7 @@ A high-performance **Model Context Protocol (MCP)** server and Studio plugin spe
 - **🌲 DataModel Inspection**: Explore the instance tree with configurable depth and class filtering.
 - **✨ Instance Manipulation**: Create, configure, select, and destroy instances (`Part`, `Model`, `Folder`, `RemoteEvent`, etc.) with full property support (`Vector3`, `Color3`, `CFrame`, `Enums`).
 - **⏪ Undo / Redo Safe**: Every modification automatically registers a checkpoint with `ChangeHistoryService`.
+- **🌐 Dual MCP Transports**: Supports both standard **stdio** (Claude Code, Cursor, Antigravity) and **Streamable HTTP MCP** via [`elysia-mcp`](https://github.com/kerlos/elysia-mcp) at `/mcp` for web/remote clients and MCP Inspector.
 - **⚡ Bun + Elysia Architecture**: Sub-millisecond response latency with zero socket-hanging heuristics or Roblox cURL timeout bugs.
 - **🛡️ 2021 Engine Compatibility**: Built specifically for Octane's 2021 Luau build (no modern `task` library dependency; uses rock-solid native scheduler globals).
 
@@ -26,8 +27,9 @@ A high-performance **Model Context Protocol (MCP)** server and Studio plugin spe
 
 ```mermaid
 flowchart LR
-    AI["AI Client\n(Antigravity / Claude / Cursor)"] -- "MCP (stdio JSON-RPC)" --> Server["OctaneMCPPlus Server\n(Bun + Elysia @ localhost:3002)"]
-    Server -- "HTTP Short-Poll & Respond" --> Plugin["Octane Studio Plugin\n(OctaneMCP.lua)"]
+    AI1["CLI / Spawned Client\n(Claude Code, Cursor, Antigravity)"] -- "MCP (stdio JSON-RPC)" --> Server["OctaneMCPPlus Server\n(Bun + Elysia + elysia-mcp)"]
+    AI2["HTTP Client / Inspector\n(Streamable HTTP / SSE)"] -- "MCP (http://localhost:3002/mcp)" --> Server
+    Server -- "HTTP Short-Poll & Respond\n(127.0.0.1:3002)" --> Plugin["Octane Studio Plugin\n(OctaneMCP.lua)"]
     Plugin -- "PluginSecurity & 2021 Luau" --> Studio["Octane Studio\n(Live DataModel & Scripts)"]
 ```
 
@@ -115,6 +117,29 @@ Configure inside your tool settings or active configuration:
     }
   }
 }
+```
+
+### HTTP Streamable MCP & Inspector (`elysia-mcp`)
+OctaneMCPPlus exposes an HTTP Streamable MCP endpoint powered by [`elysia-mcp`](https://github.com/kerlos/elysia-mcp) at `http://localhost:3002/mcp`.
+
+For remote or browser-based AI clients supporting HTTP MCP:
+```json
+{
+  "mcpServers": {
+    "octane": {
+      "url": "http://localhost:3002/mcp"
+    }
+  }
+}
+```
+
+To visually inspect and test tools using the official **MCP Inspector**:
+```bash
+# In terminal 1: Start the Octane MCP server
+bun start
+
+# In terminal 2: Launch MCP Inspector pointing to the elysia-mcp endpoint
+npx @modelcontextprotocol/inspector http://localhost:3002/mcp
 ```
 
 ---
