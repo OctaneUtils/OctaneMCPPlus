@@ -43,7 +43,8 @@
     "@elysiajs/node": "^1.4.5",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "elysia": "^1.4.30",
-    "elysia-mcp": "^0.1.1"
+    "elysia-mcp": "^0.1.1",
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@anthropic-ai/mcpb": "^2.1.2"
