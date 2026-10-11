@@ -30,18 +30,7 @@
       "args": [
         "${__dirname}/src/index.js"
       ],
-      "env": {
-        "OCTANE_PORT": "${user_config.port}"
-      }
-    }
-  },
-  "user_config": {
-    "port": {
-      "type": "number",
-      "title": "Bridge Port",
-      "description": "Local HTTP bridge port for Octane Studio (default: 3002)",
-      "required": false,
-      "default": 3002
+      "env": {}
     }
   },
   "tools": [

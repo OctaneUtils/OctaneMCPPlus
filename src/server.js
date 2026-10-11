@@ -7,7 +7,16 @@ import { z } from "zod";
 
 export class OctaneMcpBridge {
   constructor(port = 3002) {
-    this.port = port;
+    let safePort = 3002;
+    if (typeof port === "number" && !Number.isNaN(port) && port > 0 && port < 65536) {
+      safePort = port;
+    } else if (typeof port === "string") {
+      const parsed = parseInt(port, 10);
+      if (!Number.isNaN(parsed) && parsed > 0 && parsed < 65536) {
+        safePort = parsed;
+      }
+    }
+    this.port = safePort;
     this.pendingCommands = new Map(); // id -> { resolve, reject, timer, action }
     this.commandQueue = []; // array of { id, action, params }
     this.lastStudioHeartbeat = 0;
@@ -132,11 +141,17 @@ export class OctaneMcpBridge {
         }
       });
 
-    this.app.listen({ port: this.port }, ({ hostname, port }) => {
-      console.error(`[OctaneMCPPlus (Elysia + elysia-mcp)] Listening on http://${hostname || "localhost"}:${port}`);
-      console.error(`  - MCP HTTP Streamable endpoint: http://${hostname || "localhost"}:${port}/mcp`);
-      console.error(`  - Studio Bridge poll endpoint:   http://${hostname || "localhost"}:${port}/poll`);
-    });
+    try {
+      this.app.listen({ port: this.port }, ({ hostname, port }) => {
+        console.error(`[OctaneMCPPlus (Elysia + elysia-mcp)] Listening on http://${hostname || "localhost"}:${port}`);
+        console.error(`  - MCP HTTP Streamable endpoint: http://${hostname || "localhost"}:${port}/mcp`);
+        console.error(`  - Studio Bridge poll endpoint:   http://${hostname || "localhost"}:${port}/poll`);
+      });
+    } catch (err) {
+      console.error(
+        `[OctaneMCPPlus] Notice: HTTP server could not bind to port ${this.port} (${err.message}). Stdio MCP server remains active.`
+      );
+    }
   }
 
   // Register all Model Context Protocol tools on an McpServer instance
