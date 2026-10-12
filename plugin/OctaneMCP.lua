@@ -14,12 +14,34 @@ local HttpService = game:GetService("HttpService")
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local Selection = game:GetService("Selection")
 
-local SERVER_URL = "http://127.0.0.1:3002"
-local POLL_ENDPOINT = SERVER_URL .. "/poll"
-local RESPOND_ENDPOINT = SERVER_URL .. "/respond"
+-- Settings Management (Saved across sessions via plugin:GetSetting / SetSetting)
+local savedHost = plugin:GetSetting("OctaneMCP_Host")
+local savedPort = plugin:GetSetting("OctaneMCP_Port")
+local savedAutoConnect = plugin:GetSetting("OctaneMCP_AutoConnect")
+
+local config = {
+    Host = (type(savedHost) == "string" and savedHost ~= "") and savedHost or "127.0.0.1",
+    Port = (type(savedPort) == "number" and savedPort > 0) and savedPort or (tonumber(savedPort) or 3002),
+    AutoConnect = (savedAutoConnect == nil) and true or (savedAutoConnect == true)
+}
+
+local SERVER_URL = ""
+local POLL_ENDPOINT = ""
+local RESPOND_ENDPOINT = ""
+local HEALTH_ENDPOINT = ""
+
+local function updateEndpoints()
+    SERVER_URL = string.format("http://%s:%d", config.Host, config.Port)
+    POLL_ENDPOINT = SERVER_URL .. "/poll"
+    RESPOND_ENDPOINT = SERVER_URL .. "/respond"
+    HEALTH_ENDPOINT = SERVER_URL .. "/health"
+end
+
+updateEndpoints()
 
 local isConnected = false
 local isPolling = false
+local onStatusChanged = nil -- Callback to update Settings GUI
 
 -- Octane 2021 Luau uses Roblox's native scheduler globals: wait, spawn, delay
 
@@ -49,8 +71,9 @@ local function doHttpRequest(options)
     return true, res
 end
 
--- Create Toolbar & Button in Studio
+-- Create Toolbar & Buttons in Studio
 local toolbar = plugin:CreateToolbar("Octane MCP")
+
 local toggleButton = toolbar:CreateButton(
     "Toggle MCP Bridge",
     "Connect or disconnect Octane Studio from the local AI MCP Bridge",
@@ -58,6 +81,43 @@ local toggleButton = toolbar:CreateButton(
 )
 pcall(function()
     toggleButton.ClickableWhenViewportHidden = true
+end)
+
+local settingsButton = toolbar:CreateButton(
+    "MCP Settings",
+    "Configure bridge port, host IP, and auto-connect",
+    "rbxassetid://4458901886" -- settings icon
+)
+pcall(function()
+    settingsButton.ClickableWhenViewportHidden = true
+end)
+
+-- Create DockWidgetPluginGui for Settings Panel
+local widgetInfo = DockWidgetPluginGuiInfo.new(
+    Enum.InitialDockState.Float, -- float by default
+    false,                        -- initially hidden
+    false,                       -- override previous state
+    320,                         -- init width
+    400,                         -- init height
+    280,                         -- min width
+    320                          -- min height
+)
+
+local settingsWidget = plugin:CreateDockWidgetPluginGui("OctaneMCPSettingsWidget", widgetInfo)
+settingsWidget.Title = "Octane MCP Plus Settings"
+settingsWidget.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+settingsButton.Click:Connect(function()
+    settingsWidget.Enabled = not settingsWidget.Enabled
+    pcall(function()
+        settingsButton:SetActive(settingsWidget.Enabled)
+    end)
+end)
+
+settingsWidget:GetPropertyChangedSignal("Enabled"):Connect(function()
+    pcall(function()
+        settingsButton:SetActive(settingsWidget.Enabled)
+    end)
 end)
 
 -- Utility: Path Resolver
@@ -583,20 +643,394 @@ local function toggleConnection()
     end)
 
     if isConnected then
-        print("[Octane MCP] Status: ACTIVE")
+        print(string.format("[Octane MCP] Status: ACTIVE (%s)", SERVER_URL))
         startPolling()
     else
         print("[Octane MCP] Status: STOPPED")
+    end
+
+    if onStatusChanged then
+        pcall(function()
+            onStatusChanged(isConnected)
+        end)
     end
 end
 
 toggleButton.Click:Connect(toggleConnection)
 
--- Auto-connect on Studio startup
-delay(1, function()
-    if not isConnected then
-        toggleConnection()
-    end
-end)
+-- Settings UI Setup
+local function setupSettingsUI()
+    local theme = nil
+    pcall(function()
+        theme = settings().Studio.Theme
+    end)
 
-print("[Octane MCP] Plugin loaded. Toggle via Plugins toolbar if needed.")
+    local function getColor(guideColor, fallback)
+        if theme then
+            local ok, val = pcall(function()
+                return theme:GetColor(guideColor)
+            end)
+            if ok and val then return val end
+        end
+        return fallback
+    end
+
+    local mainFrame = Instance.new("ScrollingFrame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(1, 0, 1, 0)
+    mainFrame.CanvasSize = UDim2.new(0, 0, 0, 390)
+    mainFrame.ScrollBarThickness = 5
+    mainFrame.BorderSizePixel = 0
+    mainFrame.BackgroundColor3 = getColor(Enum.StudioStyleGuideColor.MainBackground, Color3.fromRGB(36, 36, 36))
+    mainFrame.Parent = settingsWidget
+
+    local padding = Instance.new("UIPadding")
+    padding.PaddingTop = UDim.new(0, 12)
+    padding.PaddingBottom = UDim.new(0, 12)
+    padding.PaddingLeft = UDim.new(0, 12)
+    padding.PaddingRight = UDim.new(0, 12)
+    padding.Parent = mainFrame
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.FillDirection = Enum.FillDirection.Vertical
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Padding = UDim.new(0, 10)
+    listLayout.Parent = mainFrame
+
+    -- Helper: Label
+    local function createLabel(text, size, bold, color, parent, layoutOrder)
+        local lbl = Instance.new("TextLabel")
+        lbl.Text = text
+        lbl.TextSize = size or 14
+        lbl.Font = bold and Enum.Font.SourceSansBold or Enum.Font.SourceSans
+        lbl.TextColor3 = color or getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(240, 240, 240))
+        lbl.BackgroundTransparency = 1
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.Size = UDim2.new(1, 0, 0, size and (size + 4) or 18)
+        lbl.LayoutOrder = layoutOrder or 0
+        lbl.Parent = parent
+        return lbl
+    end
+
+    -- Header
+    local headerFrame = Instance.new("Frame")
+    headerFrame.Name = "Header"
+    headerFrame.BackgroundTransparency = 1
+    headerFrame.Size = UDim2.new(1, 0, 0, 40)
+    headerFrame.LayoutOrder = 1
+    headerFrame.Parent = mainFrame
+
+    local headerLayout = Instance.new("UIListLayout")
+    headerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    headerLayout.Padding = UDim.new(0, 2)
+    headerLayout.Parent = headerFrame
+
+    createLabel("Octane MCP Plus", 18, true, getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(255, 255, 255)), headerFrame, 1)
+    createLabel("Studio bridge for Claude Code, Cursor & Antigravity", 12, false, Color3.fromRGB(160, 160, 160), headerFrame, 2)
+
+    -- Status Card
+    local statusCard = Instance.new("Frame")
+    statusCard.Name = "StatusCard"
+    statusCard.Size = UDim2.new(1, 0, 0, 48)
+    statusCard.BackgroundColor3 = getColor(Enum.StudioStyleGuideColor.SubBackground, Color3.fromRGB(45, 45, 45))
+    statusCard.BorderSizePixel = 0
+    statusCard.LayoutOrder = 2
+    statusCard.Parent = mainFrame
+
+    local statusCorner = Instance.new("UICorner")
+    statusCorner.CornerRadius = UDim.new(0, 6)
+    statusCorner.Parent = statusCard
+
+    local statusPad = Instance.new("UIPadding")
+    statusPad.PaddingLeft = UDim.new(0, 10)
+    statusPad.PaddingRight = UDim.new(0, 10)
+    statusPad.PaddingTop = UDim.new(0, 8)
+    statusPad.PaddingBottom = UDim.new(0, 8)
+    statusPad.Parent = statusCard
+
+    local statusDot = Instance.new("Frame")
+    statusDot.Name = "StatusDot"
+    statusDot.Size = UDim2.new(0, 12, 0, 12)
+    statusDot.Position = UDim2.new(0, 0, 0.5, -6)
+    statusDot.BackgroundColor3 = isConnected and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
+    statusDot.BorderSizePixel = 0
+    statusDot.Parent = statusCard
+
+    local dotCorner = Instance.new("UICorner")
+    dotCorner.CornerRadius = UDim.new(1, 0)
+    dotCorner.Parent = statusDot
+
+    local statusText = Instance.new("TextLabel")
+    statusText.Name = "StatusText"
+    statusText.Size = UDim2.new(1, -110, 1, 0)
+    statusText.Position = UDim2.new(0, 20, 0, 0)
+    statusText.BackgroundTransparency = 1
+    statusText.Font = Enum.Font.SourceSansBold
+    statusText.TextSize = 14
+    statusText.TextXAlignment = Enum.TextXAlignment.Left
+    statusText.TextColor3 = getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(240, 240, 240))
+    statusText.Text = isConnected and ("ACTIVE (" .. config.Port .. ")") or "STOPPED"
+    statusText.Parent = statusCard
+
+    local statusToggleBtn = Instance.new("TextButton")
+    statusToggleBtn.Name = "StatusToggleBtn"
+    statusToggleBtn.Size = UDim2.new(0, 85, 0, 28)
+    statusToggleBtn.Position = UDim2.new(1, -85, 0.5, -14)
+    statusToggleBtn.BackgroundColor3 = isConnected and Color3.fromRGB(192, 57, 43) or Color3.fromRGB(39, 174, 96)
+    statusToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    statusToggleBtn.Font = Enum.Font.SourceSansBold
+    statusToggleBtn.TextSize = 13
+    statusToggleBtn.Text = isConnected and "Disconnect" or "Connect"
+    statusToggleBtn.BorderSizePixel = 0
+    statusToggleBtn.Parent = statusCard
+
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(0, 4)
+    toggleCorner.Parent = statusToggleBtn
+
+    statusToggleBtn.MouseButton1Click:Connect(function()
+        toggleConnection()
+    end)
+
+    onStatusChanged = function(active)
+        statusDot.BackgroundColor3 = active and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
+        statusText.Text = active and ("ACTIVE (" .. config.Port .. ")") or "STOPPED"
+        statusToggleBtn.Text = active and "Disconnect" or "Connect"
+        statusToggleBtn.BackgroundColor3 = active and Color3.fromRGB(192, 57, 43) or Color3.fromRGB(39, 174, 96)
+    end
+
+    -- Settings Card
+    local settingsCard = Instance.new("Frame")
+    settingsCard.Name = "SettingsCard"
+    settingsCard.Size = UDim2.new(1, 0, 0, 185)
+    settingsCard.BackgroundColor3 = getColor(Enum.StudioStyleGuideColor.SubBackground, Color3.fromRGB(45, 45, 45))
+    settingsCard.BorderSizePixel = 0
+    settingsCard.LayoutOrder = 3
+    settingsCard.Parent = mainFrame
+
+    local settingsCorner = Instance.new("UICorner")
+    settingsCorner.CornerRadius = UDim.new(0, 6)
+    settingsCorner.Parent = settingsCard
+
+    local settingsPad = Instance.new("UIPadding")
+    settingsPad.PaddingLeft = UDim.new(0, 10)
+    settingsPad.PaddingRight = UDim.new(0, 10)
+    settingsPad.PaddingTop = UDim.new(0, 10)
+    settingsPad.PaddingBottom = UDim.new(0, 10)
+    settingsPad.Parent = settingsCard
+
+    local settingsLayout = Instance.new("UIListLayout")
+    settingsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    settingsLayout.Padding = UDim.new(0, 6)
+    settingsLayout.Parent = settingsCard
+
+    -- Host Input
+    createLabel("Bridge Host IP / Domain:", 13, true, nil, settingsCard, 1)
+
+    local hostBox = Instance.new("TextBox")
+    hostBox.Name = "HostBox"
+    hostBox.Size = UDim2.new(1, 0, 0, 26)
+    hostBox.BackgroundColor3 = getColor(Enum.StudioStyleGuideColor.InputFieldBackground, Color3.fromRGB(30, 30, 30))
+    hostBox.TextColor3 = getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(240, 240, 240))
+    hostBox.Font = Enum.Font.SourceSans
+    hostBox.TextSize = 14
+    hostBox.Text = config.Host
+    hostBox.PlaceholderText = "127.0.0.1"
+    hostBox.ClearTextOnFocus = false
+    hostBox.BorderSizePixel = 0
+    hostBox.LayoutOrder = 2
+    hostBox.Parent = settingsCard
+
+    local hostBoxCorner = Instance.new("UICorner")
+    hostBoxCorner.CornerRadius = UDim.new(0, 4)
+    hostBoxCorner.Parent = hostBox
+
+    -- Port Input
+    createLabel("Bridge Port (HTTP / MCP):", 13, true, nil, settingsCard, 3)
+
+    local portBox = Instance.new("TextBox")
+    portBox.Name = "PortBox"
+    portBox.Size = UDim2.new(1, 0, 0, 26)
+    portBox.BackgroundColor3 = getColor(Enum.StudioStyleGuideColor.InputFieldBackground, Color3.fromRGB(30, 30, 30))
+    portBox.TextColor3 = getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(240, 240, 240))
+    portBox.Font = Enum.Font.SourceSans
+    portBox.TextSize = 14
+    portBox.Text = tostring(config.Port)
+    portBox.PlaceholderText = "3002"
+    portBox.ClearTextOnFocus = false
+    portBox.BorderSizePixel = 0
+    portBox.LayoutOrder = 4
+    portBox.Parent = settingsCard
+
+    local portBoxCorner = Instance.new("UICorner")
+    portBoxCorner.CornerRadius = UDim.new(0, 4)
+    portBoxCorner.Parent = portBox
+
+    -- Auto-Connect Checkbox
+    local autoConnectBtn = Instance.new("TextButton")
+    autoConnectBtn.Name = "AutoConnectBtn"
+    autoConnectBtn.Size = UDim2.new(1, 0, 0, 26)
+    autoConnectBtn.BackgroundTransparency = 1
+    autoConnectBtn.Font = Enum.Font.SourceSans
+    autoConnectBtn.TextSize = 14
+    autoConnectBtn.TextXAlignment = Enum.TextXAlignment.Left
+    autoConnectBtn.TextColor3 = getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(240, 240, 240))
+    autoConnectBtn.Text = (config.AutoConnect and "[✓] " or "[   ] ") .. "Auto-connect when Studio starts"
+    autoConnectBtn.LayoutOrder = 5
+    autoConnectBtn.Parent = settingsCard
+
+    local currentAutoConnect = config.AutoConnect
+    autoConnectBtn.MouseButton1Click:Connect(function()
+        currentAutoConnect = not currentAutoConnect
+        autoConnectBtn.Text = (currentAutoConnect and "[✓] " or "[   ] ") .. "Auto-connect when Studio starts"
+    end)
+
+    -- Actions & Feedback
+    local actionsFrame = Instance.new("Frame")
+    actionsFrame.Name = "ActionsFrame"
+    actionsFrame.Size = UDim2.new(1, 0, 0, 75)
+    actionsFrame.BackgroundTransparency = 1
+    actionsFrame.LayoutOrder = 4
+    actionsFrame.Parent = mainFrame
+
+    local actionsLayout = Instance.new("UIListLayout")
+    actionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    actionsLayout.Padding = UDim.new(0, 6)
+    actionsLayout.Parent = actionsFrame
+
+    local btnRow = Instance.new("Frame")
+    btnRow.Name = "BtnRow"
+    btnRow.Size = UDim2.new(1, 0, 0, 32)
+    btnRow.BackgroundTransparency = 1
+    btnRow.LayoutOrder = 1
+    btnRow.Parent = actionsFrame
+
+    local btnRowLayout = Instance.new("UIListLayout")
+    btnRowLayout.FillDirection = Enum.FillDirection.Horizontal
+    btnRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    btnRowLayout.Padding = UDim.new(0, 8)
+    btnRowLayout.Parent = btnRow
+
+    -- Test Connection Button
+    local testBtn = Instance.new("TextButton")
+    testBtn.Name = "TestBtn"
+    testBtn.Size = UDim2.new(0.5, -4, 1, 0)
+    testBtn.BackgroundColor3 = Color3.fromRGB(52, 73, 94)
+    testBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    testBtn.Font = Enum.Font.SourceSansBold
+    testBtn.TextSize = 13
+    testBtn.Text = "Test Connection"
+    testBtn.BorderSizePixel = 0
+    testBtn.LayoutOrder = 1
+    testBtn.Parent = btnRow
+
+    local testCorner = Instance.new("UICorner")
+    testCorner.CornerRadius = UDim.new(0, 4)
+    testCorner.Parent = testBtn
+
+    -- Save Button
+    local saveBtn = Instance.new("TextButton")
+    saveBtn.Name = "SaveBtn"
+    saveBtn.Size = UDim2.new(0.5, -4, 1, 0)
+    saveBtn.BackgroundColor3 = Color3.fromRGB(41, 128, 185)
+    saveBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    saveBtn.Font = Enum.Font.SourceSansBold
+    saveBtn.TextSize = 13
+    saveBtn.Text = "Save & Apply"
+    saveBtn.BorderSizePixel = 0
+    saveBtn.LayoutOrder = 2
+    saveBtn.Parent = btnRow
+
+    local saveCorner = Instance.new("UICorner")
+    saveCorner.CornerRadius = UDim.new(0, 4)
+    saveCorner.Parent = saveBtn
+
+    -- Feedback Label
+    local feedbackLabel = Instance.new("TextLabel")
+    feedbackLabel.Name = "FeedbackLabel"
+    feedbackLabel.Size = UDim2.new(1, 0, 0, 28)
+    feedbackLabel.BackgroundTransparency = 1
+    feedbackLabel.Font = Enum.Font.SourceSansItalic
+    feedbackLabel.TextSize = 13
+    feedbackLabel.Text = "Configure options above and click Save & Apply."
+    feedbackLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+    feedbackLabel.TextWrapped = true
+    feedbackLabel.LayoutOrder = 2
+    feedbackLabel.Parent = actionsFrame
+
+    -- Button handlers
+    testBtn.MouseButton1Click:Connect(function()
+        feedbackLabel.Text = "Testing connection..."
+        feedbackLabel.TextColor3 = Color3.fromRGB(241, 196, 15)
+
+        spawn(function()
+            local testHost = string.gsub(hostBox.Text, "%s+", "")
+            if testHost == "" then testHost = "127.0.0.1" end
+            local testPort = tonumber(portBox.Text) or 3002
+            local testUrl = string.format("http://%s:%d/health", testHost, testPort)
+
+            local ok, res = doHttpRequest({
+                Url = testUrl,
+                Method = "GET",
+                Headers = { ["Content-Type"] = "application/json" }
+            })
+
+            if ok and res and (res.Success or res.StatusCode == 200) then
+                feedbackLabel.Text = string.format("✓ Online! Server responded at port %d", testPort)
+                feedbackLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
+            else
+                feedbackLabel.Text = string.format("✗ Unreachable at %s:%d. Is server started?", testHost, testPort)
+                feedbackLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
+            end
+        end)
+    end)
+
+    saveBtn.MouseButton1Click:Connect(function()
+        local newHost = string.gsub(hostBox.Text, "%s+", "")
+        if newHost == "" then newHost = "127.0.0.1" end
+
+        local newPort = tonumber(portBox.Text)
+        if not newPort or newPort <= 0 or newPort > 65535 then
+            feedbackLabel.Text = "✗ Invalid port number. Must be between 1 and 65535."
+            feedbackLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
+            return
+        end
+
+        config.Host = newHost
+        config.Port = math.floor(newPort)
+        config.AutoConnect = currentAutoConnect
+
+        pcall(function()
+            plugin:SetSetting("OctaneMCP_Host", config.Host)
+            plugin:SetSetting("OctaneMCP_Port", config.Port)
+            plugin:SetSetting("OctaneMCP_AutoConnect", config.AutoConnect)
+        end)
+
+        -- Update live endpoints
+        updateEndpoints()
+
+        feedbackLabel.Text = string.format("✓ Saved! Endpoints updated to port %d.", config.Port)
+        feedbackLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
+
+        if isConnected then
+            print(string.format("[Octane MCP] Bridge endpoint updated to: %s", SERVER_URL))
+            if onStatusChanged then onStatusChanged(true) end
+        end
+    end)
+end
+
+-- Initialize Settings GUI
+setupSettingsUI()
+
+-- Auto-connect on Studio startup if enabled
+if config.AutoConnect then
+    delay(1, function()
+        if not isConnected then
+            toggleConnection()
+        end
+    end)
+else
+    print("[Octane MCP] Auto-connect is disabled in settings. Click 'Toggle MCP Bridge' or use MCP Settings to connect.")
+end
+
+print("[Octane MCP] Plugin loaded. Toggle via Plugins toolbar or open MCP Settings.")

@@ -47,7 +47,7 @@ flowchart LR
 3. Copy [`plugin/OctaneMCP.lua`](./plugin/OctaneMCP.lua) directly into your Octane plugins folder:
    - **Windows**: `%localappdata%\Octane\Plugins\OctaneMCP.lua`
    - *Alternatively, paste the script into a Script inside Studio, right-click, and select "Save as Local Plugin..."*.
-4. You will see the **"Toggle MCP Bridge"** button appear in your Studio **Plugins** tab!
+4. You will see the **"Toggle MCP Bridge"** and **"MCP Settings"** buttons appear in your Studio **Plugins** tab! Use **MCP Settings** to customize port, host, or auto-connect preferences.
 
 ### 3. Clone & Run the Server
 ```bash
