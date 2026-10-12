@@ -22,7 +22,8 @@
     "test": "bun test",
     "status": "bun run tests/cli-status.js",
     "validate": "mcpb validate manifest.json",
-    "pack": "mcpb pack . && mcpb clean octane-mcp.mcpb"
+    "pack": "mcpb pack . octane-mcp.mcpb",
+    "postinstall": "node scripts/patch-elysia.js"
   },
   "keywords": [
     "mcp",
