@@ -13,6 +13,7 @@
 local HttpService = game:GetService("HttpService")
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local Selection = game:GetService("Selection")
+local RunService = game:GetService("RunService")
 
 -- Settings Management (Saved across sessions via plugin:GetSetting / SetSetting)
 local savedHost = plugin:GetSetting("OctaneMCP_Host")
@@ -47,6 +48,11 @@ local onStatusChanged = nil -- Callback to update Settings GUI
 
 -- Safe HTTP Request Helper
 local function doHttpRequest(options)
+    -- Guard against client-side execution during playtests (Roblox restricts HttpService to game server / edit mode)
+    if RunService:IsRunning() and RunService:IsClient() then
+        return false, "Http requests cannot be executed on client during playtest"
+    end
+
     local ok, res = pcall(function()
         return HttpService:RequestAsync(options)
     end)
@@ -594,40 +600,61 @@ local function startPolling()
     print("[Octane MCP] Connecting to bridge at " .. SERVER_URL .. "...")
 
     local failCount = 0
+    local wasPausedForPlaytest = false
 
     spawn(function()
         while isConnected do
-            local success, response = doHttpRequest({
-                Url = POLL_ENDPOINT,
-                Method = "GET",
-                Headers = { ["Content-Type"] = "application/json" },
-            })
+            -- If running on the client during a playtest, pause polling gracefully
+            if RunService:IsRunning() and RunService:IsClient() then
+                if not wasPausedForPlaytest then
+                    wasPausedForPlaytest = true
+                    print("[Octane MCP] Playtest active on client: bridge paused (will resume in Edit mode).")
+                    if onStatusChanged then onStatusChanged(isConnected, "PAUSED (Playtest)") end
+                end
+                wait(1.5)
+            else
+                if wasPausedForPlaytest then
+                    wasPausedForPlaytest = false
+                    failCount = 0
+                    print("[Octane MCP] Returned to Edit mode: bridge resumed.")
+                    if onStatusChanged then onStatusChanged(isConnected) end
+                end
 
-            if success and response and (response.Success or response.StatusCode == 200) then
-                failCount = 0
-                local decodeOk, data = pcall(function()
-                    return HttpService:JSONDecode(response.Body)
-                end)
+                local success, response = doHttpRequest({
+                    Url = POLL_ENDPOINT,
+                    Method = "GET",
+                    Headers = { ["Content-Type"] = "application/json" },
+                })
 
-                if decodeOk and data then
-                    if data.status == "command" and data.command then
-                        dispatchCommand(data.command)
-                        wait(0.05)
+                if success and response and (response.Success or response.StatusCode == 200) then
+                    failCount = 0
+                    local decodeOk, data = pcall(function()
+                        return HttpService:JSONDecode(response.Body)
+                    end)
+
+                    if decodeOk and data then
+                        if data.status == "command" and data.command then
+                            dispatchCommand(data.command)
+                            wait(0.05)
+                        else
+                            -- Idle: wait 0.5s before next check (fast, responsive, zero socket hangs)
+                            wait(0.5)
+                        end
                     else
-                        -- Idle: wait 0.5s before next check (fast, responsive, zero socket hangs)
                         wait(0.5)
                     end
                 else
-                    wait(0.5)
+                    failCount = failCount + 1
+                    local errStr = tostring(response)
+                    -- Silently retry on transient Roblox loopback / client playtest errors without spamming output
+                    if not string.find(errStr, "ROBLOX resources")
+                        and not string.find(errStr, "game server")
+                        and not string.find(errStr, "during playtest")
+                        and failCount >= 3 then
+                        warn("[Octane MCP] Bridge server unreachable: " .. errStr)
+                    end
+                    wait(1.5)
                 end
-            else
-                failCount = failCount + 1
-                local errStr = tostring(response)
-                -- Silently retry on transient Roblox loopback errors without spamming output
-                if not string.find(errStr, "ROBLOX resources") and failCount >= 3 then
-                    warn("[Octane MCP] Bridge server unreachable: " .. errStr)
-                end
-                wait(1.5)
             end
         end
         isPolling = false
@@ -752,11 +779,12 @@ local function setupSettingsUI()
     statusPad.PaddingBottom = UDim.new(0, 8)
     statusPad.Parent = statusCard
 
+    local isPausedOnClient = isConnected and (RunService:IsRunning() and RunService:IsClient())
     local statusDot = Instance.new("Frame")
     statusDot.Name = "StatusDot"
     statusDot.Size = UDim2.new(0, 12, 0, 12)
     statusDot.Position = UDim2.new(0, 0, 0.5, -6)
-    statusDot.BackgroundColor3 = isConnected and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
+    statusDot.BackgroundColor3 = isPausedOnClient and Color3.fromRGB(241, 196, 15) or (isConnected and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60))
     statusDot.BorderSizePixel = 0
     statusDot.Parent = statusCard
 
@@ -773,7 +801,7 @@ local function setupSettingsUI()
     statusText.TextSize = 14
     statusText.TextXAlignment = Enum.TextXAlignment.Left
     statusText.TextColor3 = getColor("MainText", Color3.fromRGB(240, 240, 240))
-    statusText.Text = isConnected and ("ACTIVE (" .. config.Port .. ")") or "STOPPED"
+    statusText.Text = isPausedOnClient and "PAUSED (Playtest)" or (isConnected and ("ACTIVE (" .. config.Port .. ")") or "STOPPED")
     statusText.Parent = statusCard
 
     local statusToggleBtn = Instance.new("TextButton")
@@ -796,11 +824,18 @@ local function setupSettingsUI()
         toggleConnection()
     end)
 
-    onStatusChanged = function(active)
-        statusDot.BackgroundColor3 = active and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
-        statusText.Text = active and ("ACTIVE (" .. config.Port .. ")") or "STOPPED"
-        statusToggleBtn.Text = active and "Disconnect" or "Connect"
-        statusToggleBtn.BackgroundColor3 = active and Color3.fromRGB(192, 57, 43) or Color3.fromRGB(39, 174, 96)
+    onStatusChanged = function(active, customText)
+        if customText then
+            statusDot.BackgroundColor3 = Color3.fromRGB(241, 196, 15)
+            statusText.Text = customText
+            statusToggleBtn.Text = "Disconnect"
+            statusToggleBtn.BackgroundColor3 = Color3.fromRGB(192, 57, 43)
+        else
+            statusDot.BackgroundColor3 = active and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
+            statusText.Text = active and ("ACTIVE (" .. config.Port .. ")") or "STOPPED"
+            statusToggleBtn.Text = active and "Disconnect" or "Connect"
+            statusToggleBtn.BackgroundColor3 = active and Color3.fromRGB(192, 57, 43) or Color3.fromRGB(39, 174, 96)
+        end
     end
 
     -- Settings Card
@@ -969,6 +1004,12 @@ local function setupSettingsUI()
 
     -- Button handlers
     testBtn.MouseButton1Click:Connect(function()
+        if RunService:IsRunning() and RunService:IsClient() then
+            feedbackLabel.Text = "[X] Paused on client during playtest. Return to Edit mode."
+            feedbackLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
+            return
+        end
+
         feedbackLabel.Text = "Testing connection..."
         feedbackLabel.TextColor3 = Color3.fromRGB(241, 196, 15)
 
@@ -1034,7 +1075,7 @@ setupSettingsUI()
 -- Auto-connect on Studio startup if enabled
 if config.AutoConnect then
     delay(1, function()
-        if not isConnected then
+        if not isConnected and not (RunService:IsRunning() and RunService:IsClient()) then
             toggleConnection()
         end
     end)
