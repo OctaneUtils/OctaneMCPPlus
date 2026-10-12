@@ -1,4 +1,4 @@
-# OctaneMCPPlus ⚡
+# OctaneMCPPlus
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Bun](https://img.shields.io/badge/Bun-%23000000.svg?logo=bun&logoColor=white)](https://bun.sh)
@@ -12,14 +12,14 @@ A high-performance **Model Context Protocol (MCP)** server and Studio plugin spe
 
 ## Features
 
-- **🚀 Real-Time Execution**: Evaluate Luau code on the fly in Studio edit mode with captured stdout/stderr and return values.
-- **📝 Script Reading & Writing**: Inspect, create, and update `Script`, `LocalScript`, and `ModuleScript` sources directly inside the DataModel.
-- **🌲 DataModel Inspection**: Explore the instance tree with configurable depth and class filtering.
-- **✨ Instance Manipulation**: Create, configure, select, and destroy instances (`Part`, `Model`, `Folder`, `RemoteEvent`, etc.) with full property support (`Vector3`, `Color3`, `CFrame`, `Enums`).
-- **⏪ Undo / Redo Safe**: Every modification automatically registers a checkpoint with `ChangeHistoryService`.
-- **🌐 Dual MCP Transports**: Supports both standard **stdio** (Claude Code, Cursor, Antigravity) and **Streamable HTTP MCP** via [`elysia-mcp`](https://github.com/kerlos/elysia-mcp) at `/mcp` for web/remote clients and MCP Inspector.
-- **⚡ Bun + Elysia Architecture**: Sub-millisecond response latency with zero socket-hanging heuristics or Roblox cURL timeout bugs.
-- **🛡️ 2021 Engine Compatibility**: Built specifically for Octane's 2021 Luau build (no modern `task` library dependency; uses rock-solid native scheduler globals).
+- **Real-Time Execution**: Evaluate Luau code on the fly in Studio edit mode with captured stdout/stderr and return values.
+- **Script Reading & Writing**: Inspect, create, and update `Script`, `LocalScript`, and `ModuleScript` sources directly inside the DataModel.
+- **DataModel Inspection**: Explore the instance tree with configurable depth and class filtering.
+- **Instance Manipulation**: Create, configure, select, and destroy instances (`Part`, `Model`, `Folder`, `RemoteEvent`, etc.) with full property support (`Vector3`, `Color3`, `CFrame`, `Enums`).
+- **Undo / Redo Safe**: Every modification automatically registers a checkpoint with `ChangeHistoryService`.
+- **Dual MCP Transports**: Supports both standard **stdio** (Claude Code, Cursor, Antigravity) and **Streamable HTTP MCP** via [`elysia-mcp`](https://github.com/kerlos/elysia-mcp) at `/mcp` for web/remote clients and MCP Inspector.
+- **Bun + Elysia Architecture**: Sub-millisecond response latency with zero socket-hanging heuristics or Roblox cURL timeout bugs.
+- **2021 Engine Compatibility**: Built specifically for Octane's 2021 Luau build (no modern `task` library dependency; uses rock-solid native scheduler globals).
 
 ---
 

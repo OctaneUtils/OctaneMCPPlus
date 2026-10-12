@@ -676,6 +676,9 @@ local function setupSettingsUI()
         return fallback
     end
 
+    -- Roblox Studio checkmark icon glyph (PUA 0xE000)
+    local CHECK_MARK = (utf8 and utf8.char) and utf8.char(0xE000) or "X"
+
     local mainFrame = Instance.new("ScrollingFrame")
     mainFrame.Name = "MainFrame"
     mainFrame.Size = UDim2.new(1, 0, 1, 0)
@@ -876,14 +879,19 @@ local function setupSettingsUI()
     autoConnectBtn.TextSize = 14
     autoConnectBtn.TextXAlignment = Enum.TextXAlignment.Left
     autoConnectBtn.TextColor3 = getColor("MainText", Color3.fromRGB(240, 240, 240))
-    autoConnectBtn.Text = (config.AutoConnect and "[✓] " or "[   ] ") .. "Auto-connect when Studio starts"
+
+    local currentAutoConnect = config.AutoConnect
+    local function getAutoConnectText(enabled)
+        return (enabled and ("[ " .. CHECK_MARK .. " ] ") or "[   ] ") .. "Auto-connect when Studio starts"
+    end
+
+    autoConnectBtn.Text = getAutoConnectText(currentAutoConnect)
     autoConnectBtn.LayoutOrder = 5
     autoConnectBtn.Parent = settingsCard
 
-    local currentAutoConnect = config.AutoConnect
     autoConnectBtn.MouseButton1Click:Connect(function()
         currentAutoConnect = not currentAutoConnect
-        autoConnectBtn.Text = (currentAutoConnect and "[✓] " or "[   ] ") .. "Auto-connect when Studio starts"
+        autoConnectBtn.Text = getAutoConnectText(currentAutoConnect)
     end)
 
     -- Actions & Feedback
@@ -977,10 +985,10 @@ local function setupSettingsUI()
             })
 
             if ok and res and (res.Success or res.StatusCode == 200) then
-                feedbackLabel.Text = string.format("✓ Online! Server responded at port %d", testPort)
+                feedbackLabel.Text = string.format("%s Online! Server responded at port %d", CHECK_MARK, testPort)
                 feedbackLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
             else
-                feedbackLabel.Text = string.format("✗ Unreachable at %s:%d. Is server started?", testHost, testPort)
+                feedbackLabel.Text = string.format("[X] Unreachable at %s:%d. Is server started?", testHost, testPort)
                 feedbackLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
             end
         end)
@@ -992,7 +1000,7 @@ local function setupSettingsUI()
 
         local newPort = tonumber(portBox.Text)
         if not newPort or newPort <= 0 or newPort > 65535 then
-            feedbackLabel.Text = "✗ Invalid port number. Must be between 1 and 65535."
+            feedbackLabel.Text = "[X] Invalid port number. Must be between 1 and 65535."
             feedbackLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
             return
         end
@@ -1010,7 +1018,7 @@ local function setupSettingsUI()
         -- Update live endpoints
         updateEndpoints()
 
-        feedbackLabel.Text = string.format("✓ Saved! Endpoints updated to port %d.", config.Port)
+        feedbackLabel.Text = string.format("%s Saved! Endpoints updated to port %d.", CHECK_MARK, config.Port)
         feedbackLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
 
         if isConnected then
