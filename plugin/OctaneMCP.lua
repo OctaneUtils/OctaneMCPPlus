@@ -665,10 +665,11 @@ local function setupSettingsUI()
         theme = settings().Studio.Theme
     end)
 
-    local function getColor(guideColor, fallback)
-        if theme then
+    local function getColor(guideColorName, fallback)
+        if theme and type(guideColorName) == "string" then
             local ok, val = pcall(function()
-                return theme:GetColor(guideColor)
+                local enumItem = Enum.StudioStyleGuideColor[guideColorName]
+                return theme:GetColor(enumItem)
             end)
             if ok and val then return val end
         end
@@ -681,7 +682,7 @@ local function setupSettingsUI()
     mainFrame.CanvasSize = UDim2.new(0, 0, 0, 390)
     mainFrame.ScrollBarThickness = 5
     mainFrame.BorderSizePixel = 0
-    mainFrame.BackgroundColor3 = getColor(Enum.StudioStyleGuideColor.MainBackground, Color3.fromRGB(36, 36, 36))
+    mainFrame.BackgroundColor3 = getColor("MainBackground", Color3.fromRGB(36, 36, 36))
     mainFrame.Parent = settingsWidget
 
     local padding = Instance.new("UIPadding")
@@ -703,7 +704,7 @@ local function setupSettingsUI()
         lbl.Text = text
         lbl.TextSize = size or 14
         lbl.Font = bold and Enum.Font.SourceSansBold or Enum.Font.SourceSans
-        lbl.TextColor3 = color or getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(240, 240, 240))
+        lbl.TextColor3 = color or getColor("MainText", Color3.fromRGB(240, 240, 240))
         lbl.BackgroundTransparency = 1
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.Size = UDim2.new(1, 0, 0, size and (size + 4) or 18)
@@ -725,14 +726,14 @@ local function setupSettingsUI()
     headerLayout.Padding = UDim.new(0, 2)
     headerLayout.Parent = headerFrame
 
-    createLabel("Octane MCP Plus", 18, true, getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(255, 255, 255)), headerFrame, 1)
+    createLabel("Octane MCP Plus", 18, true, getColor("MainText", Color3.fromRGB(255, 255, 255)), headerFrame, 1)
     createLabel("Studio bridge for Claude Code, Cursor & Antigravity", 12, false, Color3.fromRGB(160, 160, 160), headerFrame, 2)
 
     -- Status Card
     local statusCard = Instance.new("Frame")
     statusCard.Name = "StatusCard"
     statusCard.Size = UDim2.new(1, 0, 0, 48)
-    statusCard.BackgroundColor3 = getColor(Enum.StudioStyleGuideColor.SubBackground, Color3.fromRGB(45, 45, 45))
+    statusCard.BackgroundColor3 = getColor("SubBackground", Color3.fromRGB(45, 45, 45))
     statusCard.BorderSizePixel = 0
     statusCard.LayoutOrder = 2
     statusCard.Parent = mainFrame
@@ -768,7 +769,7 @@ local function setupSettingsUI()
     statusText.Font = Enum.Font.SourceSansBold
     statusText.TextSize = 14
     statusText.TextXAlignment = Enum.TextXAlignment.Left
-    statusText.TextColor3 = getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(240, 240, 240))
+    statusText.TextColor3 = getColor("MainText", Color3.fromRGB(240, 240, 240))
     statusText.Text = isConnected and ("ACTIVE (" .. config.Port .. ")") or "STOPPED"
     statusText.Parent = statusCard
 
@@ -803,7 +804,7 @@ local function setupSettingsUI()
     local settingsCard = Instance.new("Frame")
     settingsCard.Name = "SettingsCard"
     settingsCard.Size = UDim2.new(1, 0, 0, 185)
-    settingsCard.BackgroundColor3 = getColor(Enum.StudioStyleGuideColor.SubBackground, Color3.fromRGB(45, 45, 45))
+    settingsCard.BackgroundColor3 = getColor("SubBackground", Color3.fromRGB(45, 45, 45))
     settingsCard.BorderSizePixel = 0
     settingsCard.LayoutOrder = 3
     settingsCard.Parent = mainFrame
@@ -830,8 +831,8 @@ local function setupSettingsUI()
     local hostBox = Instance.new("TextBox")
     hostBox.Name = "HostBox"
     hostBox.Size = UDim2.new(1, 0, 0, 26)
-    hostBox.BackgroundColor3 = getColor(Enum.StudioStyleGuideColor.InputFieldBackground, Color3.fromRGB(30, 30, 30))
-    hostBox.TextColor3 = getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(240, 240, 240))
+    hostBox.BackgroundColor3 = getColor("InputFieldBackground", Color3.fromRGB(30, 30, 30))
+    hostBox.TextColor3 = getColor("MainText", Color3.fromRGB(240, 240, 240))
     hostBox.Font = Enum.Font.SourceSans
     hostBox.TextSize = 14
     hostBox.Text = config.Host
@@ -851,8 +852,8 @@ local function setupSettingsUI()
     local portBox = Instance.new("TextBox")
     portBox.Name = "PortBox"
     portBox.Size = UDim2.new(1, 0, 0, 26)
-    portBox.BackgroundColor3 = getColor(Enum.StudioStyleGuideColor.InputFieldBackground, Color3.fromRGB(30, 30, 30))
-    portBox.TextColor3 = getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(240, 240, 240))
+    portBox.BackgroundColor3 = getColor("InputFieldBackground", Color3.fromRGB(30, 30, 30))
+    portBox.TextColor3 = getColor("MainText", Color3.fromRGB(240, 240, 240))
     portBox.Font = Enum.Font.SourceSans
     portBox.TextSize = 14
     portBox.Text = tostring(config.Port)
@@ -874,7 +875,7 @@ local function setupSettingsUI()
     autoConnectBtn.Font = Enum.Font.SourceSans
     autoConnectBtn.TextSize = 14
     autoConnectBtn.TextXAlignment = Enum.TextXAlignment.Left
-    autoConnectBtn.TextColor3 = getColor(Enum.StudioStyleGuideColor.MainText, Color3.fromRGB(240, 240, 240))
+    autoConnectBtn.TextColor3 = getColor("MainText", Color3.fromRGB(240, 240, 240))
     autoConnectBtn.Text = (config.AutoConnect and "[✓] " or "[   ] ") .. "Auto-connect when Studio starts"
     autoConnectBtn.LayoutOrder = 5
     autoConnectBtn.Parent = settingsCard
